@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PhantomCore — Android Mod Menu &amp; Game Utility Overlay</title>
+  <style>
+    :root {
+      --bg: #07080c;
+      --glass: rgba(11, 13, 19, 0.89);
+      --border: rgba(255, 255, 255, 0.1);
+      --crimson: #ff2a55;
+      --cyan: #00f0ff;
+      --emerald: #22c55e;
+      --amber: #f59e0b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      overscroll-behavior: none;
+    }
+
+    #gameCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      display: block;
+      pointer-events: none;
+    }
+
+    .cyber-glass {
+      background: var(--glass);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border);
+      box-shadow:
+        0 24px 64px rgba(0, 0, 0, 0.78),
+        0 0 28px rgba(255, 42, 85, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Top FPS & Ping HUD */
+    #fpsHud {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      max-width: 94vw;
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #fpsHud.visible {
+      display: flex;
+    }
+
+    .hud-sep {
+      color: rgba(255, 255, 255, 0.18);
+    }
+
+    .top-accent {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--crimson), var(--cyan), var(--crimson));
+    }
+
+    .primary-btn {
+      width: 100%;
+      min-height: 48px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #ff2a55, #e11d48);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      box-shadow: 0 0 22px rgba(255, 42, 85, 0.42);
+      transition: filter 0.15s ease, transform 0.1s ease;
+    }
+
+    .primary-btn:active {
+      transform: scale(0.985);
+    }
+
+    /* Draggable Floating Bubble */
+    #floatingBubble {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 55;
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: rgba(11, 13, 19, 0.95);
+      border: 2px solid var(--crimson);
+      color: var(--crimson);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      box-shadow: 0 0 24px rgba(255, 42, 85, 0.45);
+    }
+
+    #floatingBubble.visible {
+      display: flex;
+    }
+
+    #floatingBubble.open {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 24px rgba(0, 240, 255, 0.45);
+    }
+
+    #bubbleBadge {
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      background: var(--crimson);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #07080c;
+    }
+
+    #floatingBubble.open #bubbleBadge {
+      background: var(--cyan);
+      color: #07080c;
+    }
+
+    /* Mod Menu Panel */
+    #menuWrapper {
+      position: fixed;
+      inset: 0;
+      z-index: 45;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      pointer-events: none;
+    }
+
+    #menuWrapper.open {
+      display: flex;
+    }
+
+    #modPanel {
+      pointer-events: auto;
+      width: 100%;
+      max-width: 450px;
+      max-height: 86vh;
+      border-radius: 18px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #panelHeader {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .icon-btn {
+      min-width: 36px;
+      min-height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin: 12px 14px 8px;
+      padding: 4px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      min-height: 38px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tab-btn.active-crimson {
+      background: var(--crimson);
+      color: #fff;
+      box-shadow: 0 0 14px rgba(255, 42, 85, 0.45);
+    }
+
+    .tab-btn.active-cyan {
+      background: var(--cyan);
+      color: #07080c;
+      box-shadow: 0 0 14px rgba(0, 240, 255, 0.45);
+    }
+
+    .tab-btn.active-neutral {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+
+    .panel-body {
+      padding: 6px 14px 12px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    .toggle-row {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      color: inherit;
+      text-align: left;
+    }
+
+    .toggle-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .toggle-desc {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .switch-track {
+      width: 44px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .switch-knob {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #07080c;
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      transition: transform 0.18s ease;
+    }
+
+    .toggle-row.on .switch-track {
+      background: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.65);
+    }
+
+    .toggle-row.on.crimson .switch-track {
+      background: var(--crimson);
+      box-shadow: 0 0 12px rgba(255, 42, 85, 0.65);
+    }
+
+    .toggle-row.on .switch-knob {
+      transform: translateX(20px);
+    }
+
+    .slider-box {
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .slider-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--cyan);
+      border: 2px solid #07080c;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.85);
+      cursor: pointer;
+    }
+
+    input[type="range"].crimson::-webkit-slider-thumb {
+      background: var(--crimson);
+      box-shadow: 0 0 10px rgba(255, 42, 85, 0.85);
+    }
+
+    .seg-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 12px;
+    }
+
+    .seg-btns {
+      display: flex;
+      gap: 6px;
+    }
+
+    .seg-btn {
+      min-height: 32px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.45);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .seg-btn.active {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: rgba(0, 240, 255, 0.55);
+      color: var(--cyan);
+    }
+
+    /* Terminal Footer */
+    .terminal-section {
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.58);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #consoleBox {
+      height: 110px;
+      border-radius: 10px;
+      background: #050609;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 10px;
+      overflow-y: auto;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .log-cmd { color: var(--cyan); font-weight: 600; }
+    .log-ok { color: var(--emerald); font-weight: 600; }
+    .log-warn { color: var(--amber); }
+    .log-info { color: #cbd5e1; }
+
+    #injectBtn.active {
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.6);
+      color: #6ee7b7;
+      box-shadow: 0 0 18px rgba(16, 185, 129, 0.25);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Top FPS & Ping HUD -->
+  <div id="fpsHud" class="cyber-glass mono visible">
+    <span id="hudFps" style="color: #00f0ff; font-weight: 700;">120 FPS</span>
+    <span class="hud-sep">|</span>
+    <span id="hudPing" style="color: #22c55e; font-weight: 700;">14 ms</span>
+    <span class="hud-sep">|</span>
+    <span id="hudMode" style="color: #cbd5e1;">120Hz Boost</span>
+    <span id="hudBypassSep" class="hud-sep" style="display:none;">|</span>
+    <span id="hudBypass" style="color: #22c55e; font-weight: 700; display:none;">Bypassed</span>
+  </div>
+
+  <!-- Draggable Floating Bubble -->
+  <button id="floatingBubble" class="visible open" type="button" aria-label="Toggle Mod Menu">
+    <span style="font-size:22px; font-weight:700;">&#8982;</span>
+    <span id="bubbleBadge">&ndash;</span>
+  </button>
+
+  <!-- Main Floating Mod Menu -->
+  <div id="menuWrapper" class="open">
+    <div id="modPanel" class="cyber-glass">
+      <div class="top-accent"></div>
+
+      <div id="panelHeader">
+        <div>
+          <div style="font-weight:700; font-size:14px;">PhantomCore Overlay</div>
+          <div id="headerSub" class="mono" style="font-size:11px; color:#94a3b8;">ARM64-v8a &middot; Rootless Overlay</div>
+        </div>
+        <button id="minimizeBtn" class="icon-btn" type="button" title="Collapse to Bubble">&ndash;</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active-crimson" data-tab="combat" type="button">Aimbot</button>
+        <button class="tab-btn" data-tab="esp" type="button">ESP Visuals</button>
+        <button class="tab-btn" data-tab="engine" type="button">FPS &amp; HUD</button>
+      </div>
+
+      <div class="panel-body">
+        <!-- Combat Tab -->
+        <div id="tab-combat" class="tab-pane active">
+          <button class="toggle-row crimson on" data-toggle="aimbotEnabled" type="button">
+            <div>
+              <div class="toggle-title">Aimbot Lock Assist</div>
+              <div class="toggle-desc">Tracks enemies inside FOV circle</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+
+          <button class="toggle-row on" data-toggle="showFovCircle" type="button">
+            <div>
+              <div class="toggle-title">Draw Neon FOV Circle</div>
+              <div class="toggle-desc">Live center target acquisition ring</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+
+          <div class="slider-box">
+            <div class="slider-head">
+              <span>FOV Circle Radius</span>
+              <span id="fovVal" class="mono" style="color:#00f0ff; font-weight:700;">110 px</span>
+            </div>
+            <input id="fovSlider" type="range" min="35" max="240" step="5" value="110" />
+          </div>
+
+          <div class="slider-box">
+            <div class="slider-head">
+              <span>Aimbot Smoothness</span>
+              <span id="smoothVal" class="mono" style="color:#ff2a55; font-weight:700;">6.5x</span>
+            </div>
+            <input id="smoothSlider" class="crimson" type="range" min="1" max="20" step="0.5" value="6.5" />
+          </div>
+        </div>
+
+        <!-- ESP Tab -->
+        <div id="tab-esp" class="tab-pane">
+          <button class="toggle-row on" data-toggle="espEnabled" type="button">
+            <div>
+              <div class="toggle-title">Master ESP Overlay</div>
+              <div class="toggle-desc">Live enemy hitboxes &amp; telemetry</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+
+          <button class="toggle-row on" data-toggle="espBoxes" type="button">
+            <div>
+              <div class="toggle-title">Corner Hitbox Frame</div>
+              <div class="toggle-desc">Neon bounding box &amp; head point</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+
+          <button class="toggle-row on" data-toggle="espHealthBar" type="button">
+            <div>
+              <div class="toggle-title">Dynamic Health Bar</div>
+              <div class="toggle-desc">Color-coded HP meter per target</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+
+          <button class="toggle-row on" data-toggle="espSnaplines" type="button">
+            <div>
+              <div class="toggle-title">Target Snaplines</div>
+              <div class="toggle-desc">Tracer lines to active targets</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+        </div>
+
+        <!-- Engine Tab -->
+        <div id="tab-engine" class="tab-pane">
+          <button class="toggle-row on" data-toggle="fpsBoosterEnabled" type="button">
+            <div>
+              <div class="toggle-title">120 FPS &amp; Anti-Lag Booster</div>
+              <div class="toggle-desc">Unlocks 120Hz pacing &amp; live FPS HUD</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+
+          <button class="toggle-row crimson on" data-toggle="crosshairEnabled" type="button">
+            <div>
+              <div class="toggle-title">Custom Pro Crosshair</div>
+              <div class="toggle-desc">Sharp center-screen reticle</div>
+            </div>
+            <div class="switch-track"><div class="switch-knob"></div></div>
+          </button>
+
+          <div class="seg-row">
+            <span>Reticle Style</span>
+            <div class="seg-btns">
+              <button class="seg-btn active" data-cross="cross" type="button">Cross</button>
+              <button class="seg-btn" data-cross="dot" type="button">Dot</button>
+              <button class="seg-btn" data-cross="chevron" type="button">Chevron</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Python & Memory Injection Terminal -->
+      <div class="terminal-section">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+          <span style="font-weight:600;">Python &amp; Memory Hook Console</span>
+          <button id="clearLogsBtn" type="button" style="background:none; border:none; color:#94a3b8; font-size:11px; cursor:pointer;">Clear</button>
+        </div>
+        <div id="consoleBox" class="mono"></div>
+        <button id="injectBtn" class="primary-btn" type="button">INJECT PYTHON BYPASS</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const state = {
+        unlocked: true,
+        menuOpen: true,
+        aimbotEnabled: true,
+        showFovCircle: true,
+        fovRadius: 110,
+        aimSmoothness: 6.5,
+        espEnabled: true,
+        espBoxes: true,
+        espHealthBar: true,
+        espSnaplines: true,
+        fpsBoosterEnabled: true,
+        crosshairEnabled: true,
+        crosshairStyle: 'cross',
+        bypassState: 'idle'
+      };
+
+      const bubble = document.getElementById('floatingBubble');
+      const bubbleBadge = document.getElementById('bubbleBadge');
+      const menuWrapper = document.getElementById('menuWrapper');
+      const modPanel = document.getElementById('modPanel');
+      const panelHeader = document.getElementById('panelHeader');
+      const minimizeBtn = document.getElementById('minimizeBtn');
+      const hudFps = document.getElementById('hudFps');
+      const hudPing = document.getElementById('hudPing');
+      const hudMode = document.getElementById('hudMode');
+      const hudBypass = document.getElementById('hudBypass');
+      const hudBypassSep = document.getElementById('hudBypassSep');
+      const consoleBox = document.getElementById('consoleBox');
+      const injectBtn = document.getElementById('injectBtn');
+      const clearLogsBtn = document.getElementById('clearLogsBtn');
+
+      function nowTime() {
+        const d = new Date();
+        return d.toTimeString().slice(0, 8);
+      }
+
+      function addLog(level, text) {
+        const line = document.createElement('div');
+        line.innerHTML = `<span style="color:#64748b;">[${nowTime()}]</span> <span class="log-${level}">${text}</span>`;
+        consoleBox.appendChild(line);
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }
+
+      addLog('info', 'PhantomCore runtime ready · Overlay unlocked.');
+
+      // 2. Draggable Floating Bubble (Pointer Events + translate3d)
+      let bPos = { x: Math.max(12, window.innerWidth - 74), y: Math.round(window.innerHeight * 0.22) };
+      let bDrag = { id: null, sx: 0, sy: 0, ox: 0, oy: 0, moved: false };
+
+      function applyBubblePos() {
+        bPos.x = Math.min(Math.max(12, bPos.x), window.innerWidth - 68);
+        bPos.y = Math.min(Math.max(12, bPos.y), window.innerHeight - 68);
+        bubble.style.transform = `translate3d(${bPos.x}px, ${bPos.y}px, 0)`;
+      }
+      applyBubblePos();
+      window.addEventListener('resize', applyBubblePos);
+
+      function setMenuOpen(open) {
+        state.menuOpen = open;
+        menuWrapper.classList.toggle('open', open);
+        bubble.classList.toggle('open', open);
+        bubbleBadge.innerHTML = open ? '&ndash;' : '+';
+      }
+
+      bubble.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        bubble.setPointerCapture(e.pointerId);
+        bDrag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: bPos.x, oy: bPos.y, moved: false };
+      });
+
+      bubble.addEventListener('pointermove', function (e) {
+        if (bDrag.id !== e.pointerId) return;
+        const dx = e.clientX - bDrag.sx;
+        const dy = e.clientY - bDrag.sy;
+        if (Math.hypot(dx, dy) > 5) bDrag.moved = true;
+        bPos.x = bDrag.ox + dx;
+        bPos.y = bDrag.oy + dy;
+        applyBubblePos();
+      });
+
+      bubble.addEventListener('pointerup', function (e) {
+        if (bDrag.id !== e.pointerId) return;
+        bDrag.id = null;
+        if (!bDrag.moved) setMenuOpen(!state.menuOpen);
+      });
+
+      minimizeBtn.addEventListener('click', function () {
+        setMenuOpen(false);
+      });
+
+      // Draggable Menu Panel Header
+      let pOffset = { x: 0, y: 0 };
+      let pDrag = { id: null, sx: 0, sy: 0, ox: 0, oy: 0 };
+      panelHeader.addEventListener('pointerdown', function (e) {
+        if (e.target.closest('button')) return;
+        e.preventDefault();
+        panelHeader.setPointerCapture(e.pointerId);
+        pDrag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: pOffset.x, oy: pOffset.y };
+      });
+      panelHeader.addEventListener('pointermove', function (e) {
+        if (pDrag.id !== e.pointerId) return;
+        pOffset.x = pDrag.ox + (e.clientX - pDrag.sx);
+        pOffset.y = pDrag.oy + (e.clientY - pDrag.sy);
+        modPanel.style.transform = `translate3d(${pOffset.x}px, ${pOffset.y}px, 0)`;
+      });
+      panelHeader.addEventListener('pointerup', function (e) {
+        if (pDrag.id === e.pointerId) pDrag.id = null;
+      });
+
+      // 3. Tabs, Toggles & Sliders
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-tab');
+          document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active-crimson', 'active-cyan', 'active-neutral'));
+          btn.classList.add(target === 'combat' ? 'active-crimson' : target === 'esp' ? 'active-cyan' : 'active-neutral');
+          document.querySelectorAll('.tab-pane').forEach((p) => p.classList.remove('active'));
+          document.getElementById(`tab-${target}`).classList.add('active');
+        });
+      });
+
+      document.querySelectorAll('.toggle-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          const key = row.getAttribute('data-toggle');
+          state[key] = !state[key];
+          row.classList.toggle('on', state[key]);
+        });
+      });
+
+      document.getElementById('fovSlider').addEventListener('input', (e) => {
+        state.fovRadius = Number(e.target.value);
+        document.getElementById('fovVal').textContent = `${state.fovRadius} px`;
+      });
+
+      document.getElementById('smoothSlider').addEventListener('input', (e) => {
+        state.aimSmoothness = Number(e.target.value);
+        document.getElementById('smoothVal').textContent = `${state.aimSmoothness.toFixed(1)}x`;
+      });
+
+      document.querySelectorAll('[data-cross]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.crosshairStyle = btn.getAttribute('data-cross');
+          document.querySelectorAll('[data-cross]').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+
+      // 4. FPS & Ping HUD Updater
+      setInterval(() => {
+        if (!state.unlocked) return;
+        const fps = state.fpsBoosterEnabled ? 118 + Math.floor(Math.random() * 3) : 57 + Math.floor(Math.random() * 4);
+        const ping = state.fpsBoosterEnabled ? 12 + Math.floor(Math.random() * 5) : 44 + Math.floor(Math.random() * 11);
+        hudFps.textContent = `${fps} FPS`;
+        hudFps.style.color = state.fpsBoosterEnabled ? '#00f0ff' : '#e2e8f0';
+        hudPing.textContent = `${ping} ms`;
+        hudPing.style.color = state.fpsBoosterEnabled ? '#22c55e' : '#f59e0b';
+        hudMode.textContent = state.fpsBoosterEnabled ? '120Hz Boost' : '60Hz Stock';
+      }, 650);
+
+      // 5. Realistic Python & Memory Injection Terminal
+      clearLogsBtn.addEventListener('click', () => {
+        consoleBox.innerHTML = '';
+      });
+
+      injectBtn.addEventListener('click', () => {
+        if (state.bypassState === 'injecting') return;
+        state.bypassState = 'injecting';
+        injectBtn.disabled = true;
+        injectBtn.textContent = 'EXECUTING PYTHON HOOKS...';
+
+        const steps = [
+          [120, 'cmd', '$ python3 core_hook.py --arch arm64-v8a --pid 14892'],
+          [480, 'info', '[*] Loading pymem-android & frida-gum bindings (v16.4.1)...'],
+          [900, 'info', '[*] Attaching to target: com.tactical.ops.mobile'],
+          [1400, 'ok', '[+] Found libil2cpp.so base @ 0x7a4f200000 (48.6 MB)'],
+          [1900, 'info', '[*] Scanning memory regions for anti-cheat CRC32 watchdog...'],
+          [2450, 'ok', '[+] Patching libanogs.so checksum [NOP x4 @ 0x00419F88]'],
+          [2950, 'ok', '[+] Hooking AimAssist & FramePacingJNI callbacks...'],
+          [3400, 'ok', 'SUCCESS! Memory hooks active · Anti-cheat bypass verified.']
+        ];
+
+        steps.forEach(([delay, level, msg], idx) => {
+          setTimeout(() => {
+            addLog(level, msg);
+            if (idx === steps.length - 1) {
+              state.bypassState = 'active';
+              injectBtn.disabled = false;
+              injectBtn.classList.add('active');
+              injectBtn.textContent = 'BYPASS ACTIVE — RE-INJECT HOOKS';
+              hudBypass.style.display = 'inline';
+              hudBypassSep.style.display = 'inline';
+            }
+          }, delay);
+        });
+      });
+
+      // 6. Live Game Arena Canvas Simulation
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      const bots = [
+        { name: 'OPFOR-01', bx: -0.32, by: -0.04, sx: 0.45, sy: 0.7, p: 0.2, hp: 92, d: 28.4 },
+        { name: 'VANGUARD', bx: 0.26, by: 0.05, sx: 0.36, sy: 0.52, p: 1.9, hp: 66, d: 41.7 },
+        { name: 'SPECTRE-7', bx: 0.0, by: -0.05, sx: 0.58, sy: 0.41, p: 3.4, hp: 38, d: 22.1 },
+        { name: 'RECON-4', bx: 0.45, by: -0.08, sx: 0.28, sy: 0.65, p: 5.1, hp: 100, d: 55.2 }
+      ];
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      let last = performance.now();
+      let elapsed = 0;
+      let aimPos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+      function frame(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        elapsed += dt * (state.fpsBoosterEnabled ? 1.15 : 0.92);
+
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const cx = w / 2;
+        const cy = h / 2;
+        const horizon = h * 0.46;
+
+        ctx.fillStyle = '#07080d';
+        ctx.fillRect(0, 0, w, h);
+
+        // Tactical perspective grid
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.09)';
+        ctx.lineWidth = 1;
+        for (let i = -16; i <= 16; i++) {
+          ctx.beginPath();
+          ctx.moveTo(cx + i * w * 0.032, horizon);
+          ctx.lineTo(cx + i * w * 0.16, h);
+          ctx.stroke();
+        }
+        const scroll = (elapsed * 0.35) % 1;
+        for (let i = 0; i < 14; i++) {
+          const t = (i + scroll) / 14;
+          const y = horizon + Math.pow(t, 2.15) * (h - horizon);
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+
+        const targets = bots.map((b) => {
+          const sx = cx + (b.bx + Math.sin(elapsed * b.sx + b.p) * 0.25) * w * 0.55;
+          const sy = h * 0.48 + (b.by + Math.cos(elapsed * b.sy + b.p * 1.3) * 0.08) * h * 0.55;
+          const dist = Math.max(12, b.d + Math.sin(elapsed * 0.6 + b.p) * 6);
+          const scale = Math.max(0.68, Math.min(1.4, 42 / dist));
+          const headY = sy - 48 * scale * 0.48;
+          return { b, sx, sy, scale, headY, dCenter: Math.hypot(sx - cx, headY - cy) };
+        });
+
+        const inFov = targets.filter((t) => t.dCenter <= state.fovRadius).sort((a, b) => a.dCenter - b.dCenter);
+        const locked = state.unlocked && state.aimbotEnabled && inFov.length ? inFov[0] : null;
+
+        targets.forEach((t) => {
+          const isLock = locked && locked.b.name === t.b.name;
+          const bw = 36 * t.scale;
+          const bh = 74 * t.scale;
+          const left = t.sx - bw / 2;
+          const top = t.sy - bh * 0.54;
+
+          // Silhouette
+          ctx.fillStyle = isLock ? 'rgba(255,42,85,0.35)' : 'rgba(148,163,184,0.22)';
+          ctx.fillRect(t.sx - 11 * t.scale, t.sy - 18 * t.scale, 22 * t.scale, 44 * t.scale);
+          ctx.beginPath();
+          ctx.arc(t.sx, t.headY, 7 * t.scale, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (state.unlocked && state.espEnabled) {
+            if (state.espSnaplines) {
+              ctx.strokeStyle = isLock ? 'rgba(255,42,85,0.65)' : 'rgba(0,240,255,0.38)';
+              ctx.beginPath();
+              ctx.moveTo(cx, h);
+              ctx.lineTo(t.sx, top + bh);
+              ctx.stroke();
+            }
+            if (state.espBoxes) {
+              ctx.strokeStyle = isLock ? '#ff2a55' : '#00f0ff';
+              ctx.lineWidth = 1.6;
+              ctx.strokeRect(left, top, bw, bh);
+              ctx.fillStyle = '#ff2a55';
+              ctx.beginPath();
+              ctx.arc(t.sx, t.headY, 2.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            if (state.espHealthBar) {
+              const hpRatio = t.b.hp / 100;
+              ctx.fillStyle = 'rgba(0,0,0,0.7)';
+              ctx.fillRect(left - 7, top, 4, bh);
+              ctx.fillStyle = hpRatio > 0.6 ? '#22c55e' : hpRatio > 0.3 ? '#f59e0b' : '#ff2a55';
+              ctx.fillRect(left - 7, top + bh * (1 - hpRatio), 4, bh * hpRatio);
+            }
+            ctx.font = '600 11px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = isLock ? '#ff2a55' : '#e2e8f0';
+            ctx.fillText(`${t.b.name} ${t.b.d.toFixed(1)}m`, t.sx, top - 6);
+          }
+        });
+
+        if (state.unlocked && (state.showFovCircle || state.aimbotEnabled)) {
+          ctx.strokeStyle = locked ? '#ff2a55' : '#00f0ff';
+          ctx.lineWidth = locked ? 2 : 1.5;
+          ctx.beginPath();
+          ctx.arc(cx, cy, state.fovRadius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        const goal = locked ? { x: locked.sx, y: locked.headY } : { x: cx, y: cy };
+        const lerp = Math.min(1, Math.max(0.03, 1 / (state.aimSmoothness * 0.85)));
+        aimPos.x += (goal.x - aimPos.x) * lerp;
+        aimPos.y += (goal.y - aimPos.y) * lerp;
+
+        if (state.unlocked && state.aimbotEnabled && locked) {
+          ctx.strokeStyle = '#ff2a55';
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(aimPos.x, aimPos.y);
+          ctx.stroke();
+        }
+
+        if (state.unlocked && state.crosshairEnabled) {
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 2;
+          if (state.crosshairStyle === 'cross') {
+            ctx.beginPath();
+            ctx.moveTo(cx - 12, cy); ctx.lineTo(cx - 4, cy);
+            ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 12, cy);
+            ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy - 4);
+            ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 12);
+            ctx.stroke();
+          } else if (state.crosshairStyle === 'dot') {
+            ctx.fillStyle = '#00f0ff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(cx - 9, cy + 6);
+            ctx.lineTo(cx, cy - 3);
+            ctx.lineTo(cx + 9, cy + 6);
+            ctx.stroke();
+          }
+        }
+
+        requestAnimationFrame(frame);
+      }
+
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

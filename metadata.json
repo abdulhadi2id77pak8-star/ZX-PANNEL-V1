@@ -1,0 +1,6 @@
+{
+  "name": "PhantomCore Android Mod Menu & Game Utility Overlay",
+  "description": "Interactive cyberpunk Android Mod Menu & Game Utility Overlay simulator featuring VIP activation, draggable floating bubble, live ESP & FOV canvas preview, 120 FPS HUD, and Python memory hook terminal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
